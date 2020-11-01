@@ -6,8 +6,11 @@ environment:
 build_script:
 - cmd: >-
     git submodule update --init --recursive
+
     dotnet restore
+
     msbuild PreappPartnersLib.sln /p:Configuration=Debug /p:OutputPath=c:\project\build\debug
+
     msbuild PreappPartnersLib.sln /p:Configuration=Release /p:OutputPath=c:\project\build\release
 artifacts:
 - path: build/release
