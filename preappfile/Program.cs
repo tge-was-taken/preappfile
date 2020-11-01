@@ -44,8 +44,9 @@ namespace preappfile
                     parserArgs.Insert(0, "-i");
                     if (!parserArgs.Contains("-o") || !parserArgs.Contains("--output"))
                     {
-                        parserArgs.Add("o");
-                        parserArgs.Add(Path.GetDirectoryName(args[0]));
+                        parserArgs.Add("-o");
+                        var outPath = Path.Combine(Path.GetDirectoryName(args[0]), Path.GetFileNameWithoutExtension(args[0]));
+                        parserArgs.Add(outPath);
                     }
                 }
                 else if (Directory.Exists(args[0]))

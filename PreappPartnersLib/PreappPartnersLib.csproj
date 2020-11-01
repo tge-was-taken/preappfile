@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="FileSystem\CpkUtil.cs~RF1ebb263c.TMP" />
     <None Remove="FileSystem\HashUtil.cs~RF1b0ea7ff.TMP" />
   </ItemGroup>
 
