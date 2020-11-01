@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "preappfile": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\Chris\\source\\repos\\p4gcpktool\\preappfile\\bin\\Debug\\netcoreapp3.1\\testoutput\""
+    }
+  }
+}
