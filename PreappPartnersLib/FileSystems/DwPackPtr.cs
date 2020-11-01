@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace PreappPartnersLib.FileSystem
+namespace PreappPartnersLib.FileSystems
 {
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public unsafe struct DwPackPtr : IDisposable

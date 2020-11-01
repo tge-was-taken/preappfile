@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace PreappPartnersLib.FileSystem
+namespace PreappPartnersLib.FileSystems
 {
     public static class HashUtil
     {

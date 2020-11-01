@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace PreappPartnersLib.FileSystem
+namespace PreappPartnersLib.FileSystems
 {
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public unsafe struct CpkPtr : IDisposable

@@ -8,7 +8,7 @@ using Amicitia.IO.Binary;
 using Amicitia.IO.Streams;
 using PreappPartnersLib.Compression;
 
-namespace PreappPartnersLib.FileSystem
+namespace PreappPartnersLib.FileSystems
 {
     public class DwPackFile
     {

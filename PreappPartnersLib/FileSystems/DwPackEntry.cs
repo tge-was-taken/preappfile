@@ -3,7 +3,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace PreappPartnersLib.FileSystem
+namespace PreappPartnersLib.FileSystems
 {
     [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 0x120)]
     public unsafe struct DwPackEntry
