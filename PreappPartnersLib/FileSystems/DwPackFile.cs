@@ -74,7 +74,8 @@ namespace PreappPartnersLib.FileSystems
 
                 var entry = new DwPackEntry();
                 entry.Field00 = e.Field00;
-                entry.Id = i;
+                entry.Index = (short)i;
+                entry.PackIndex = (short)header.Index;
                 entry.Path = e.Path;
                 entry.Field104 = e.Field104;
                 entry.CompressedSize = e.CompressedSize;

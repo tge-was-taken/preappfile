@@ -1,11 +1,12 @@
 ﻿using PreappPartnersLib.Compression;
-using PreappPartnersLib.FileSystem;
+using PreappPartnersLib.FileSystems;
 using PreappPartnersLib.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -14,6 +15,13 @@ using System.Threading.Tasks;
 
 namespace PreappPartnersLib.FileSystems
 {
+    public enum CompressionState
+    {
+        Detect,
+        Compressed,
+        Uncompressed
+    }
+
     public class CpkFile
     {
         public List<CpkFileEntry> Entries { get; }
@@ -36,7 +44,7 @@ namespace PreappPartnersLib.FileSystems
             Read(stream);
         }
 
-        public void Read( Stream stream )
+        public void Read( Stream stream, CompressionState compressionState = CompressionState.Detect )
         {
             Entries.Clear();
 
@@ -45,57 +53,41 @@ namespace PreappPartnersLib.FileSystems
             try
             {
                 stream.Read(buffer);
-
-                if (Encoding.ASCII.GetString(buffer.Slice(0, 8)) != "DW_PACK\0")
-                {
-                    // Decompress
-                    var decompressed = CpkUtil.DecompressCpk(buffer, out var decompressedSize);
-                    bufferMemory.Dispose();
-                    bufferMemory = decompressed;
-                    buffer = bufferMemory.Memory.Span.Slice(0, decompressedSize);
-                }
-
-                ref var header = ref MemoryMarshal.AsRef<CpkHeader>(buffer);
-                var entryOff = CpkHeader.SIZE + (CpkLookupTableEntry.SIZE * CpkLookupTableEntry.ENTRY_COUNT);
-                var entryCount = (buffer.Length - entryOff) / CpkEntry.SIZE;
-                for (int i = 0; i < entryCount; i++)
-                {
-                    ref var entry = ref MemoryMarshal.AsRef<CpkEntry>(buffer.Slice(entryOff));
-                    if (entry.Path.Length == 0)
-                        continue;
-
-                    Entries.Add(new CpkFileEntry() { Path = entry.Path, FileIndex = entry.FileIndex, PacIndex = entry.PacIndex });
-                    entryOff += CpkEntry.SIZE;
-                }
-
-                //using var temp = File.CreateText("dump.txt");
-                //entryOff = CpkHeader.SIZE;
-                //for (int i = 0; i < CpkLookupTableEntry.ENTRY_COUNT; i++)
-                //{
-                //    ref var entry = ref MemoryMarshal.AsRef<CpkLookupTableEntry>(buffer.Slice(entryOff));
-                //    for (int j = 0; j < entry.Count; j++)
-                //    {
-                //        var path = "{MISSING}";
-
-                //        if (entry.Index + j < Entries.Count)
-                //            path = Entries[entry.Index + j].Path;
-
-                //        var hash1 = HashUtil.ComputeHash(path);
-                //        var hash2 = HashUtil.ComputeHash2(path);
-                //        Debug.Assert(hash1 == hash2);
-
-                //        if (i != hash1)
-                //        {
-                //            temp.WriteLine($"{path}\t0x{i:X4}\t0x{hash2:X4}");
-                //        }
-                //    }
-
-                //    entryOff += CpkLookupTableEntry.SIZE;
-                //}
+                Read( buffer );
             }
             finally
             {
                 bufferMemory.Dispose();
+            }
+        }
+
+        public void Read( Span<byte> buffer, CompressionState compressionState = CompressionState.Detect )
+        {
+            if ( compressionState == CompressionState.Compressed || 
+               ( compressionState == CompressionState.Detect && Encoding.ASCII.GetString( buffer.Slice( 0, 8 ) ) != "DW_PACK\0" ) )
+            {
+                using var decompressed = CpkUtil.DecompressCpk( buffer, out var decompressedSize );
+                ReadUncompressed( decompressed.Memory.Span.Slice( 0, decompressedSize ) );
+            }
+            else
+            {
+                ReadUncompressed( buffer );
+            }
+        }
+
+        private void ReadUncompressed( Span<byte> buffer )
+        {
+            ref var header = ref MemoryMarshal.AsRef<CpkHeader>( buffer );
+            var entryOff = CpkHeader.SIZE + ( CpkLookupTableEntry.SIZE * CpkLookupTableEntry.ENTRY_COUNT );
+            var entryCount = ( buffer.Length - entryOff ) / CpkEntry.SIZE;
+            for ( int i = 0; i < entryCount; i++ )
+            {
+                ref var entry = ref MemoryMarshal.AsRef<CpkEntry>( buffer.Slice( entryOff ) );
+                if ( entry.Path.Length == 0 )
+                    continue;
+
+                Entries.Add( new CpkFileEntry() { Path = entry.Path, FileIndex = entry.FileIndex, PacIndex = entry.PacIndex } );
+                entryOff += CpkEntry.SIZE;
             }
         }
 
@@ -108,68 +100,14 @@ namespace PreappPartnersLib.FileSystems
 
             try
             {
-                // Write header
-                ref var header = ref MemoryMarshal.AsRef<CpkHeader>(buffer);
-                header.Signature = CpkHeader.SIGNATURE;
-                header.Field08 = 0;
-                header.FileCount = Entries.Count;
+                Write( buffer );
 
-                // Build & write lookup table
-                var hashLookup = new Dictionary<string, ushort>();
-                for (int i = 0; i < Entries.Count; i++)
-                    hashLookup[Entries[i].Path] = HashUtil.ComputeHash(Entries[i].Path);
-
-                var lookupTable = new CpkLookupTableEntry[CpkLookupTableEntry.ENTRY_COUNT];
-                for (int i = 0; i < lookupTable.Length; i++)
-                    lookupTable[i].Index = -1;
-
-                //var temp = Entries.ToList();
-                Entries.Sort((x, y) => hashLookup[x.Path].CompareTo(hashLookup[y.Path]));
-                //for (int i = 0; i < temp.Count; i++)
-                //{
-                //    var entryOrig = temp[i];
-                //    var entryNew = Entries[i];
-                //    if (entryOrig != entryNew)
-                //    {
-                //        var newIndex = Entries.IndexOf(entryOrig);
-
-                //        var hashOrig = HashUtil.ComputeHash(entryOrig.Path);
-                //        var hashNew = HashUtil.ComputeHash(entryNew.Path);
-                //    }
-                //}
-
-                for (int i = 0; i < Entries.Count; i++)
+                if ( compress )
                 {
-                    var hash = hashLookup[Entries[i].Path];
-                    lookupTable[hash].Count++;
-                    if (lookupTable[hash].Index < 0)
-                        lookupTable[hash].Index = i;
-                }
-
-                var bufferOffset = CpkHeader.SIZE;
-                for (int i = 0; i < lookupTable.Length; i++)
-                {
-                    ref var entry = ref MemoryMarshal.AsRef<CpkLookupTableEntry>(buffer.Slice(bufferOffset));
-                    entry = lookupTable[i];
-                    bufferOffset += CpkLookupTableEntry.SIZE;
-                }
-
-                // Write entries
-                for (int i = 0; i < Entries.Count; i++)
-                {
-                    ref var entry = ref MemoryMarshal.AsRef<CpkEntry>(buffer.Slice(bufferOffset));
-                    entry.Path = Entries[i].Path;
-                    entry.FileIndex = Entries[i].FileIndex;
-                    entry.PacIndex = Entries[i].PacIndex;
-                    bufferOffset += CpkEntry.SIZE;
-                }
-
-                if (compress)
-                {
-                    var comBuffer = CpkUtil.CompressCpk(buffer, out var comSize);
+                    var comBuffer = CpkUtil.CompressCpk( buffer, out var comSize );
                     bufferMemory.Dispose();
                     bufferMemory = comBuffer;
-                    buffer = bufferMemory.Memory.Span.Slice(0, comSize);
+                    buffer = bufferMemory.Memory.Span.Slice( 0, comSize );
                 }
 
                 stream.Write(buffer);
@@ -177,6 +115,52 @@ namespace PreappPartnersLib.FileSystems
             finally
             {
                 bufferMemory.Dispose();
+            }
+        }
+
+        public void Write( Span<byte> buffer )
+        {
+            // Write header
+            ref var header = ref MemoryMarshal.AsRef<CpkHeader>( buffer );
+            header.Signature = CpkHeader.SIGNATURE;
+            header.Field08 = 0;
+            header.FileCount = Entries.Count;
+
+            // Build & write lookup table
+            var hashLookup = new Dictionary<string, ushort>();
+            for ( int i = 0; i < Entries.Count; i++ )
+                hashLookup[ Entries[ i ].Path ] = HashUtil.ComputeHash( Entries[ i ].Path );
+
+            var lookupTable = new CpkLookupTableEntry[ CpkLookupTableEntry.ENTRY_COUNT ];
+            for ( int i = 0; i < lookupTable.Length; i++ )
+                lookupTable[ i ].Index = -1;
+
+            Entries.Sort( ( x, y ) => hashLookup[ x.Path ].CompareTo( hashLookup[ y.Path ] ) );
+
+            for ( int i = 0; i < Entries.Count; i++ )
+            {
+                var hash = hashLookup[ Entries[ i ].Path ];
+                lookupTable[ hash ].Count++;
+                if ( lookupTable[ hash ].Index < 0 )
+                    lookupTable[ hash ].Index = i;
+            }
+
+            var bufferOffset = CpkHeader.SIZE;
+            for ( int i = 0; i < lookupTable.Length; i++ )
+            {
+                ref var entry = ref MemoryMarshal.AsRef<CpkLookupTableEntry>( buffer.Slice( bufferOffset ) );
+                entry = lookupTable[ i ];
+                bufferOffset += CpkLookupTableEntry.SIZE;
+            }
+
+            // Write entries
+            for ( int i = 0; i < Entries.Count; i++ )
+            {
+                ref var entry = ref MemoryMarshal.AsRef<CpkEntry>( buffer.Slice( bufferOffset ) );
+                entry.Path = Entries[ i ].Path;
+                entry.FileIndex = Entries[ i ].FileIndex;
+                entry.PacIndex = Entries[ i ].PacIndex;
+                bufferOffset += CpkEntry.SIZE;
             }
         }
 
