@@ -13,11 +13,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="FileSystems\CpkUtil.cs~RF1ebb263c.TMP" />
-    <None Remove="FileSystems\HashUtil.cs~RF1b0ea7ff.TMP" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\external\Amicitia.IO\src\Amicitia.IO\Amicitia.IO.csproj" />
   </ItemGroup>
 
