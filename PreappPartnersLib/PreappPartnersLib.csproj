@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
@@ -13,8 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="FileSystem\CpkUtil.cs~RF1ebb263c.TMP" />
-    <None Remove="FileSystem\HashUtil.cs~RF1b0ea7ff.TMP" />
+    <None Remove="FileSystems\CpkUtil.cs~RF1ebb263c.TMP" />
+    <None Remove="FileSystems\HashUtil.cs~RF1b0ea7ff.TMP" />
   </ItemGroup>
 
   <ItemGroup>

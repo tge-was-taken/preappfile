@@ -12,7 +12,8 @@ namespace PreappPartnersLib.FileSystems
         public const int SIZE = 0x120;
 
         public int Field00;
-        public int Id;
+        public short Index;
+        public short PackIndex;
         public fixed byte PathBytes[PATH_LENGTH];
         public int Field104;
         public int CompressedSize;
