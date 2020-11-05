@@ -107,12 +107,42 @@ namespace preappfile
         static int UnpackCpk(Options options)
         {
             var name = Path.GetFileNameWithoutExtension(options.Input);
-            var dir = Path.GetDirectoryName(options.Input);
+            var dir = Path.GetDirectoryName( options.Input );
+
+            // Try to detect pac base name
+            var pacBaseName = name;
+            if (!File.Exists(Path.Combine(dir, $"{pacBaseName}{0:D5}.pac")))
+            {
+                // Trim language suffix: _e, _c, _k
+                pacBaseName = pacBaseName.Substring( 0, pacBaseName.IndexOf( '_' ) );
+            }
 
             var cpk = new CpkFile(options.Input);
+
+            // Load needed pacs
             var packs = new List<DwPackFile>();
-            foreach (var file in Directory.EnumerateFiles(dir, $"{name}*.pac"))
-                packs.Add(new DwPackFile(file));
+            foreach ( var pacIdx in cpk.Entries.Select( x => x.PacIndex ).Distinct().OrderBy( x => x ) )
+            {
+                var pacName = $"{pacBaseName}{pacIdx:D5}.pac";
+                var pacPath = Path.Combine( dir, pacName );
+                if ( !File.Exists(pacPath))
+                {
+                    Console.WriteLine( $"Failed to unpack: Missing {pacName}" );
+                    return 1;
+                }
+
+                var pac = new DwPackFile( pacPath );
+                var refFileCount = cpk.Entries.Where( x => x.PacIndex == pacIdx )
+                    .Select( x => x.FileIndex )
+                    .Max() + 1;
+                if ( refFileCount > pac.Entries.Count )
+                {
+                    Console.WriteLine( $"Failed to unpack: CPK references {refFileCount} in {pacName} but only {pac.Entries.Count} exist." );
+                    return 1;
+                }
+
+                packs.Add( pac );
+            }
 
             cpk.Unpack(packs, options.Output, (e => Console.WriteLine($"Extracting {e.Path} (pac: {e.PacIndex}, file: {e.FileIndex})")));
             return 0;

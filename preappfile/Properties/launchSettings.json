@@ -2,7 +2,7 @@
   "profiles": {
     "preappfile": {
       "commandName": "Project",
-      "commandLineArgs": "\"D:\\games\\steam\\steamapps\\common\\Persona 4 Golden\\data00006.pac\""
+      "commandLineArgs": "\"D:\\games\\steam\\steamapps\\common\\Persona 4 Golden\\data_e.cpk\""
     }
   }
 }
