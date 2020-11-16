@@ -2,7 +2,7 @@
   "profiles": {
     "preappfile": {
       "commandName": "Project",
-      "commandLineArgs": "-i \"testinput\" -o \"test.cpk\" --append \"D:\\games\\steam\\steamapps\\common\\Persona 4 Golden\\data_e.cpk\""
+      "commandLineArgs": "\"D:\\games\\steam\\steamapps\\common\\Persona 4 Golden\\data_e.cpk\" --unpack-filter *.pac"
     }
   }
 }

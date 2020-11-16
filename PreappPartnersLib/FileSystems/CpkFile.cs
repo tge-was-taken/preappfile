@@ -164,12 +164,12 @@ namespace PreappPartnersLib.FileSystems
             }
         }
 
-        public void Unpack(IList<DwPackFile> packs, string directoryPath, Action<CpkFileEntry> callback)
+        public void Unpack(IList<DwPackFile> packs, string directoryPath, Func<CpkFileEntry, bool> callback)
         {
             var baseStreamLock = new object();
             Parallel.ForEach(Entries, (entry =>
             {
-                callback?.Invoke(entry);
+                if ( callback != null && !callback( entry ) ) return;
                 var unpackPath = Path.Combine(directoryPath, entry.Path);
                 var unpackDir = Path.GetDirectoryName(unpackPath);
                 Directory.CreateDirectory(unpackDir);
@@ -198,7 +198,7 @@ namespace PreappPartnersLib.FileSystems
             }));
         }
 
-        public static CpkFile Pack(string directoryPath, bool compress, Action<string> fileCallback,
+        public static CpkFile Pack(string directoryPath, bool compress, Func<string, bool> fileCallback,
             Action<DwPackFile> packCreatedCallback)
         {
             var cpk = new CpkFile();
@@ -210,7 +210,7 @@ namespace PreappPartnersLib.FileSystems
 
             Parallel.ForEach(Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories), (path =>
             {
-                fileCallback?.Invoke(path);
+                if ( fileCallback != null && !fileCallback( path ) ) return;
                 var relativePath = path.Substring(path.IndexOf(directoryPath) + directoryPath.Length + 1);
                 var entry = new DwPackFileEntry(relativePath, File.OpenRead(path), compress);
 

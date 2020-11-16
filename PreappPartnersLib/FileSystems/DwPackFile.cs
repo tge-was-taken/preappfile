@@ -93,12 +93,12 @@ namespace PreappPartnersLib.FileSystems
             }
         }
 
-        public void Unpack(string directoryPath, Action<DwPackFileEntry> callback)
+        public void Unpack(string directoryPath, Func<DwPackFileEntry, bool> callback)
         {
             var baseStreamLock = new object();
             Parallel.ForEach(Entries, (entry =>
             {
-                callback?.Invoke(entry);
+                if ( callback != null && !callback( entry ) ) return;
                 var unpackPath = Path.Combine(directoryPath, entry.Path);
                 var unpackDir = Path.GetDirectoryName(unpackPath);
                 Directory.CreateDirectory(unpackDir);
@@ -126,17 +126,17 @@ namespace PreappPartnersLib.FileSystems
             }));
         }
 
-        public void AddFiles( string directoryPath, bool compress, Action<string> callback )
+        public void AddFiles( string directoryPath, bool compress, Func<string, bool> callback )
         {
             Parallel.ForEach( Directory.EnumerateFiles( directoryPath, "*", SearchOption.AllDirectories ), ( path =>
             {
-                callback?.Invoke( path );
+                if ( callback != null && !callback( path ) ) return;
                 var relativePath = path.Substring( path.IndexOf( directoryPath ) + directoryPath.Length + 1 );
                 Entries.Add( new DwPackFileEntry( relativePath, File.OpenRead( path ), compress ) );
             }));
         }
 
-        public static DwPackFile Pack( string directoryPath, int index, bool compress, Action<string> callback )
+        public static DwPackFile Pack( string directoryPath, int index, bool compress, Func<string, bool> callback )
         {
             var pack = new DwPackFile();
             pack.Index = index;

@@ -1,4 +1,5 @@
 ﻿using CommandLine;
+using GlobExpressions;
 using PreappPartnersLib.FileSystems;
 using System;
 using System.Collections.Generic;
@@ -22,7 +23,12 @@ namespace preappfile
 
             [Option( 'a', "append", Required = false, HelpText = "Archive to append files to." )]
             public string AppendPath { get; set; }
+
+            [Option( "unpack-filter", Required = false, HelpText = "Glob pattern that file paths must match to be eligible for extracting." )]
+            public string UnpackFilter { get; set; }
         }
+
+        private static Glob sUnpackFilterGlob;
 
         static int Main( string[] args )
         {
@@ -66,8 +72,16 @@ namespace preappfile
             return parserArgs;
         }
 
+        static void PreProcessOptions(Options options)
+        {
+            if ( options.UnpackFilter != null && sUnpackFilterGlob == null )
+                sUnpackFilterGlob = new Glob( options.UnpackFilter, GlobOptions.CaseInsensitive | GlobOptions.Compiled );
+        }
+
         static int Run( Options options )
         {
+            PreProcessOptions( options );
+
             if ( File.Exists( options.InputPath ) )
             {
                 // Unpack archive
@@ -107,6 +121,12 @@ namespace preappfile
             return 1;
         }
 
+        static bool ShouldUnpack( string path )
+        {
+            if ( sUnpackFilterGlob == null ) return true;
+            return sUnpackFilterGlob.IsMatch( path );
+        }
+
         static int UnpackCpk( Options options )
         {
             var name = Path.GetFileNameWithoutExtension( options.InputPath );
@@ -141,7 +161,12 @@ namespace preappfile
                 packs.Add( pac );
             }
 
-            cpk.Unpack( packs, options.OutputPath, ( e => Console.WriteLine( $"Extracting {e.Path} (pac: {e.PacIndex}, file: {e.FileIndex})" ) ) );
+            cpk.Unpack( packs, options.OutputPath, ( e =>
+            {
+                if ( !ShouldUnpack( e.Path ) ) return false;
+                Console.WriteLine( $"Extracting {e.Path} (pac: {e.PacIndex}, file: {e.FileIndex})" );
+                return true;
+            } ) );
             return 0;
         }
 
@@ -169,7 +194,12 @@ namespace preappfile
         static int UnpackPac( Options options )
         {
             var pack = new DwPackFile( options.InputPath );
-            pack.Unpack( options.OutputPath, ( entry => Console.WriteLine( $"Extracting {entry.Path}" ) ) );
+            pack.Unpack( options.OutputPath, ( entry =>
+            {
+                if ( !ShouldUnpack( entry.Path ) ) return false;
+                Console.WriteLine( $"Extracting {entry.Path}" );
+                return true;
+            } ) );
             return 0;
         }
 
@@ -184,7 +214,11 @@ namespace preappfile
             if ( options.AppendPath == null )
             {
                 cpk = CpkFile.Pack( options.InputPath, options.Compress,
-                    ( p => Console.WriteLine( $"{cpkName}: Adding {p}" ) ),
+                    ( p =>
+                    {
+                        Console.WriteLine( $"{cpkName}: Adding {p}" );
+                        return true;
+                    } ),
                     ( pack =>
                     {
                         var pacName = FormatPacName( cpkBaseName, pack.Index );
@@ -206,7 +240,11 @@ namespace preappfile
                 var pacName = FormatPacName( $"{GetPacBaseNameFromCpkBaseName( cpkDir, cpkBaseName )}", newPacIndex );
 
                 Console.WriteLine( "Creating PAC: {pacName}" );
-                var pac = DwPackFile.Pack( options.InputPath, newPacIndex, options.Compress, ( e => Console.WriteLine( $"Adding {e}" ) ) );
+                var pac = DwPackFile.Pack( options.InputPath, newPacIndex, options.Compress, ( e =>
+                {
+                    Console.WriteLine( $"Adding {e}" );
+                    return true;
+                }));
                 var pacPath = Path.Combine( cpkDir, pacName );
                 using var packFile = File.Create( pacPath );
                 pac.Write( packFile, options.Compress, ( e => Console.WriteLine( $"Writing {e.Path}" ) ) );
@@ -233,13 +271,21 @@ namespace preappfile
             if ( options.AppendPath == null )
             {
                 Console.WriteLine( $"Creating PAC: {Path.GetFileName( options.OutputPath )}" );
-                pack = DwPackFile.Pack( options.InputPath, 0, options.Compress, ( p => Console.WriteLine( $"Adding {p}" ) ) );
+                pack = DwPackFile.Pack( options.InputPath, 0, options.Compress, ( p =>
+                {
+                    Console.WriteLine( $"Adding {p}" );
+                    return true;
+                } ) );
             }
             else
             {
                 Console.WriteLine( $"Appending to PAC: { options.OutputPath }" );
                 pack = new DwPackFile( options.AppendPath );
-                pack.AddFiles( options.InputPath, options.Compress, ( p => Console.WriteLine( $"Adding {p}" ) ) );
+                pack.AddFiles( options.InputPath, options.Compress, ( p =>
+                {
+                    Console.WriteLine( $"Adding {p}" );
+                    return true;
+                } ) );
             }
 
             Console.WriteLine( $"Writing PAC" );
