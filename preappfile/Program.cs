@@ -24,6 +24,9 @@ namespace preappfile
             [Option( 'a', "append", Required = false, HelpText = "Archive to append files to." )]
             public string AppendPath { get; set; }
 
+            [Option( "pac-index", Required = false, HelpText = "PAC index to use when appending files to a CPK or packing a PAC" )]
+            public int? PacIndex { get; set; }
+
             [Option( "unpack-filter", Required = false, HelpText = "Glob pattern that file paths must match to be eligible for extracting." )]
             public string UnpackFilter { get; set; }
         }
@@ -213,48 +216,11 @@ namespace preappfile
             Console.WriteLine( "Creating CPK" );
             if ( options.AppendPath == null )
             {
-                cpk = CpkFile.Pack( options.InputPath, options.Compress,
-                    ( p =>
-                    {
-                        Console.WriteLine( $"{cpkName}: Adding {p}" );
-                        return true;
-                    } ),
-                    ( pack =>
-                    {
-                        var pacName = FormatPacName( cpkBaseName, pack.Index );
-                        var pacPath = Path.Combine( cpkDir, pacName );
-                        using var pacFile = File.Create( pacPath );
-                        Console.WriteLine( $"Creating {pacName}" );
-                        pack.Write( pacFile, options.Compress,
-                            ( p => Console.WriteLine( $"{pacName}: Writing {p.Path}" ) ) );
-                    } ) );
+                cpk = PackCpkDoPack( options, cpkName, cpkBaseName, cpkDir );
             }
             else
             {
-                Console.WriteLine( $"Appending to: {options.AppendPath}" );
-                Console.WriteLine( $"Loading CPK: {options.AppendPath}" );
-                cpk = new CpkFile( options.AppendPath );
-
-                // Create new PAC
-                var newPacIndex = cpk.Entries.Select( x => x.PacIndex ).Max() + 1;
-                var pacName = FormatPacName( $"{GetPacBaseNameFromCpkBaseName( cpkDir, cpkBaseName )}", newPacIndex );
-
-                Console.WriteLine( "Creating PAC: {pacName}" );
-                var pac = DwPackFile.Pack( options.InputPath, newPacIndex, options.Compress, ( e =>
-                {
-                    Console.WriteLine( $"Adding {e}" );
-                    return true;
-                }));
-                var pacPath = Path.Combine( cpkDir, pacName );
-                using var packFile = File.Create( pacPath );
-                pac.Write( packFile, options.Compress, ( e => Console.WriteLine( $"Writing {e.Path}" ) ) );
-
-                // Add entries to CPK
-                for ( var i = 0; i < pac.Entries.Count; i++ )
-                {
-                    var entry = pac.Entries[ i ];
-                    cpk.Entries.Add( new CpkFileEntry( entry.Path, (short)i, (short)newPacIndex ) );
-                }
+                cpk = PackCpkDoAppend( options, cpkBaseName, cpkDir );
             }
 
             // Write CPK
@@ -264,34 +230,99 @@ namespace preappfile
             return 0;
         }
 
+        private static CpkFile PackCpkDoAppend( Options options, string cpkBaseName, string cpkDir )
+        {
+            CpkFile cpk;
+            Console.WriteLine( $"Appending to: {options.AppendPath}" );
+            Console.WriteLine( $"Loading CPK: {options.AppendPath}" );
+            cpk = new CpkFile( options.AppendPath );
+
+            // Create new PAC
+            var newPacIndex = options.PacIndex.GetValueOrDefault( cpk.Entries.Select( x => x.PacIndex ).Max() + 1 );
+            var pacName = FormatPacName( $"{GetPacBaseNameFromCpkBaseName( cpkDir, cpkBaseName )}", newPacIndex );
+
+            Console.WriteLine( "Creating PAC: {pacName}" );
+            var pacPath = Path.Combine( cpkDir, pacName );
+
+            var pac = DwPackFile.Pack( options.InputPath, newPacIndex, options.Compress, ( e =>
+            {
+                Console.WriteLine( $"Adding {e}" );
+                return true;
+            } ) );
+            using var packFile = File.Create( pacPath );
+            pac.Write( packFile, options.Compress, ( e => Console.WriteLine( $"Writing {e.Path}" ) ) );
+
+            // Add entries to CPK
+            for ( var i = 0; i < pac.Entries.Count; i++ )
+            {
+                var entry = pac.Entries[ i ];
+                cpk.Entries.Add( new CpkFileEntry( entry.Path, (short)i, (short)newPacIndex ) );
+            }
+
+            return cpk;
+        }
+
+        private static CpkFile PackCpkDoPack( Options options, string cpkName, string cpkBaseName, string cpkDir )
+        {
+            return CpkFile.Pack( options.InputPath, options.Compress,
+                ( p =>
+                {
+                    Console.WriteLine( $"{cpkName}: Adding {p}" );
+                    return true;
+                } ),
+                ( pack =>
+                {
+                    var pacName = FormatPacName( cpkBaseName, pack.Index );
+                    var pacPath = Path.Combine( cpkDir, pacName );
+                    using var pacFile = File.Create( pacPath );
+                    Console.WriteLine( $"Creating {pacName}" );
+                    pack.Write( pacFile, options.Compress,
+                        ( p => Console.WriteLine( $"{pacName}: Writing {p.Path}" ) ) );
+                } ) );
+        }
+
         static int PackPac( Options options )
         {
             DwPackFile pack;
 
             if ( options.AppendPath == null )
             {
-                Console.WriteLine( $"Creating PAC: {Path.GetFileName( options.OutputPath )}" );
-                pack = DwPackFile.Pack( options.InputPath, 0, options.Compress, ( p =>
-                {
-                    Console.WriteLine( $"Adding {p}" );
-                    return true;
-                } ) );
+                pack = PackPacDoPack( options );
             }
             else
             {
-                Console.WriteLine( $"Appending to PAC: { options.OutputPath }" );
-                pack = new DwPackFile( options.AppendPath );
-                pack.AddFiles( options.InputPath, options.Compress, ( p =>
-                {
-                    Console.WriteLine( $"Adding {p}" );
-                    return true;
-                } ) );
+                pack = PackPacDoAppend( options );
             }
 
             Console.WriteLine( $"Writing PAC" );
             using var packFile = File.Create( options.OutputPath );
             pack.Write( packFile, options.Compress, ( e => Console.WriteLine( $"Writing {e.Path}" ) ) );
             return 0;
+        }
+
+        private static DwPackFile PackPacDoAppend( Options options )
+        {
+            DwPackFile pack;
+            Console.WriteLine( $"Appending to PAC: { options.OutputPath }" );
+            pack = new DwPackFile( options.AppendPath );
+            pack.AddFiles( options.InputPath, options.Compress, ( p =>
+            {
+                Console.WriteLine( $"Adding {p}" );
+                return true;
+            } ) );
+            return pack;
+        }
+
+        private static DwPackFile PackPacDoPack( Options options )
+        {
+            DwPackFile pack;
+            Console.WriteLine( $"Creating PAC: {Path.GetFileName( options.OutputPath )}" );
+            pack = DwPackFile.Pack( options.InputPath, options.PacIndex.GetValueOrDefault( 0 ), options.Compress, ( p =>
+            {
+                Console.WriteLine( $"Adding {p}" );
+                return true;
+            } ) );
+            return pack;
         }
     }
 }
